@@ -1,22 +1,31 @@
+// api/generate-pdf.js
 const chromium = require("@sparticuz/chromium");
 const puppeteer = require("puppeteer-core");
 
 module.exports = async (req, res) => {
+  let browser;
+
   try {
-    const attemptId = req.query.attemptId;
-    const langRaw = (req.query.lang || "en").toLowerCase();
+    const attemptId = String(req.query.attemptId || "").trim();
+    const langRaw = String(req.query.lang || "en").toLowerCase();
     const lang = langRaw === "ar" ? "ar" : "en";
 
     if (!attemptId) {
       return res.status(400).json({ error: "Missing attemptId" });
     }
 
-    const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-    const url = `${FRONTEND_URL}/reports/pdf/${encodeURIComponent(
-      attemptId
-    )}?lang=${lang}&puppeteer=1`;
+    const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
 
-    const browser = await puppeteer.launch({
+    // ✅ IMPORTANT:
+    // Your PrintReportClient reads attemptId from query params (?attemptId=...)
+    // so we must call /print-report, NOT /reports/pdf/<id>
+    const url =
+      `${FRONTEND_URL}/print-report` +
+      `?attemptId=${encodeURIComponent(attemptId)}` +
+      `&lang=${lang}` +
+      `&puppeteer=1`;
+
+    browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
@@ -25,13 +34,16 @@ module.exports = async (req, res) => {
 
     const page = await browser.newPage();
 
+    // A4-ish viewport helps layout consistency
+    await page.setViewport({ width: 1240, height: 1754 });
+
+    // Load page
     await page.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
 
-    // wait for your marker
+    // Wait for your "ready" marker (set by PrintReportClient)
     await page.waitForSelector('body[data-pdf-ready="1"]', { timeout: 60000 });
 
-    // wait for fonts (Cairo etc.)
-    // if fonts API exists, wait, otherwise continue
+    // Wait for fonts (Cairo etc.)
     try {
       await page.evaluateHandle("document.fonts.ready");
     } catch {}
@@ -43,13 +55,12 @@ module.exports = async (req, res) => {
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
     });
 
-    await browser.close();
-
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="dyad-report-${String(attemptId).slice(0, 8)}.pdf"`
+      `attachment; filename="dyad-report-${attemptId.slice(0, 8)}.pdf"`
     );
+
     return res.status(200).send(pdfBuffer);
   } catch (error) {
     console.error("PDF error:", error);
@@ -57,5 +68,11 @@ module.exports = async (req, res) => {
       error: "PDF generation failed",
       details: String(error?.message || error),
     });
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {}
+    }
   }
 };
