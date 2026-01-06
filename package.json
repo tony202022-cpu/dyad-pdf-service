@@ -9,5 +9,8 @@
   "dependencies": {
     "@sparticuz/chromium": "^143.0.4",
     "puppeteer-core": "^24.34.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
