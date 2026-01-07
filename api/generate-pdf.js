@@ -1,24 +1,23 @@
-// api/generate-pdf.js
 const chromium = require("@sparticuz/chromium");
 const puppeteer = require("puppeteer-core");
 
-module.exports = async (req, res) => {
+module.exports = async function handler(req, res) {
   let browser;
 
   try {
-    const attemptId = String(req.query.attemptId || "").trim();
-    const langRaw = String(req.query.lang || "en").toLowerCase();
+    const attemptId = req.query.attemptId;
+    const langRaw = (req.query.lang || "en").toLowerCase();
     const lang = langRaw === "ar" ? "ar" : "en";
 
     if (!attemptId) {
-      return res.status(400).json({ error: "Missing attemptId" });
+      res.statusCode = 400;
+      res.end("Missing attemptId");
+      return;
     }
 
-    const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    const FRONTEND_URL =
+      process.env.FRONTEND_URL || "https://assessment-app-nextjs.vercel.app";
 
-    // ✅ IMPORTANT:
-    // Your PrintReportClient reads attemptId from query params (?attemptId=...)
-    // so we must call /print-report, NOT /reports/pdf/<id>
     const url =
       `${FRONTEND_URL}/print-report` +
       `?attemptId=${encodeURIComponent(attemptId)}` +
@@ -34,40 +33,51 @@ module.exports = async (req, res) => {
 
     const page = await browser.newPage();
 
-    // A4-ish viewport helps layout consistency
-    await page.setViewport({ width: 1240, height: 1754 });
+    await page.goto(url, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
 
-    // Load page
-    await page.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
+    // Wait until your React page explicitly signals readiness
+    await page.waitForSelector('body[data-pdf-ready="1"]', {
+      timeout: 60000,
+    });
 
-    // Wait for your "ready" marker (set by PrintReportClient)
-    await page.waitForSelector('body[data-pdf-ready="1"]', { timeout: 60000 });
-
-    // Wait for fonts (Cairo etc.)
+    // Wait for fonts (Cairo)
     try {
       await page.evaluateHandle("document.fonts.ready");
     } catch {}
 
-    const pdfBuffer = await page.pdf({
+    const pdfBytes = await page.pdf({
       format: "A4",
       printBackground: true,
       preferCSSPageSize: true,
-      margin: { top: "0", right: "0", bottom: "0", left: "0" },
+      margin: {
+        top: "0",
+        right: "0",
+        bottom: "0",
+        left: "0",
+      },
     });
 
+    const pdfBuffer = Buffer.isBuffer(pdfBytes)
+      ? pdfBytes
+      : Buffer.from(pdfBytes);
+
+    res.statusCode = 200;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="dyad-report-${attemptId.slice(0, 8)}.pdf"`
     );
+    res.setHeader("Content-Length", pdfBuffer.length);
 
-    return res.status(200).send(pdfBuffer);
-  } catch (error) {
-    console.error("PDF error:", error);
-    return res.status(500).json({
-      error: "PDF generation failed",
-      details: String(error?.message || error),
-    });
+    // 🔥 THIS IS THE CRITICAL LINE
+    res.end(pdfBuffer);
+  } catch (err) {
+    console.error("PDF generation error:", err);
+    res.statusCode = 500;
+    res.end("PDF generation failed");
   } finally {
     if (browser) {
       try {
