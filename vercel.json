@@ -1,14 +1,8 @@
 {
   "version": 2,
+  "builds": [{ "src": "api/*.js", "use": "@vercel/node" }],
   "routes": [
     { "src": "/api/health", "dest": "/api/health.js" },
     { "src": "/api/generate-pdf", "dest": "/api/generate-pdf.js" }
-  ],
-  "functions": {
-    "api/generate-pdf.js": {
-      "maxDuration": 120,
-      "memory": 2048
-    }
-  }
+  ]
 }
-
