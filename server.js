@@ -1,17 +1,18 @@
-const express = require("express");
+const http = require("http");
 
-const app = express();
+const server = http.createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("ok");
+    return;
+  }
 
-// Always respond to health checks
-app.get("/", (req, res) => {
-  res.status(200).send("ok");
-});
-
-app.get("/health", (req, res) => {
-  res.status(200).send("healthy");
+  res.writeHead(404);
+  res.end("not found");
 });
 
 const port = process.env.PORT || 8080;
-app.listen(port, "0.0.0.0", () => {
+
+server.listen(port, "0.0.0.0", () => {
   console.log("Cloud Run listening on", port);
 });
