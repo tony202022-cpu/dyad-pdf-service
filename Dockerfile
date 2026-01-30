@@ -19,9 +19,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Install deps via pnpm (lockfile optional)
-COPY package.json ./
-RUN corepack enable && pnpm install
+# Install dependencies (use npm because repo has package-lock.json)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 # Copy source
 COPY . .
