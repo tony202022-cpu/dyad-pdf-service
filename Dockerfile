@@ -19,9 +19,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Install deps via pnpm
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+# Install deps via pnpm (lockfile optional)
+COPY package.json ./
+RUN corepack enable && pnpm install
 
 # Copy source
 COPY . .
