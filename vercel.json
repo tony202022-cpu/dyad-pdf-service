@@ -5,9 +5,5 @@
       "maxDuration": 60,
       "memory": 2048
     }
-  },
-  "routes": [
-    { "src": "/api/health", "dest": "/api/health.js" },
-    { "src": "/api/generate-pdf", "dest": "/api/generate-pdf.js" }
-  ]
+  }
 }
